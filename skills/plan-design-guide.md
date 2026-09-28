@@ -1,6 +1,6 @@
 ---
 name: plan-design-guide
-description: Guides collaborative implementation planning with System Architecture diagrams, Program Design call stacks and file trees, key contracts, vertical slices, and approval checkpoints. Use while native plan mode is active when detailed planning artifacts are needed.
+description: Guides collaborative implementation planning with System Architecture diagrams, Program Design call stacks and file trees, key contracts, implementation tasks, and approval checkpoints. Use while native plan mode is active when detailed planning artifacts are needed.
 ---
 
 # Plan Design Guide
@@ -96,29 +96,31 @@ function resolveTarget(items: Item[], cursor: Cursor): ItemId | null;
 
 Identify ownership, state transitions, errors, edge cases, and tests. Compare alternatives only when a real choice remains, then recommend one. End with an explicit human approval checkpoint.
 
-## Phase 4: Vertical Slices
+## Phase 4: Implementation Tasks
 
-After program-design approval, turn the design into small end-to-end increments. Do not produce a horizontal stack-order plan.
+After program-design approval, turn the design into concrete tasks ordered by dependencies. Group work by responsibility, module, or change when that makes implementation clearer. Tasks do not need to deliver standalone end-to-end behavior.
 
-For every slice, provide:
+When `update_plan` is available, publish the complete task list with stable IDs, concise English titles, and initial `pending` statuses. Update the complete list as work progresses using `pending`, `in_progress`, `done`, or `blocked`; preserve IDs when reordering. Mark tasks done only after their relevant checks. Task tracking changes session metadata only and never substitutes for human approval. Keep it current during implementation after leaving plan mode.
+
+For the implementation as a whole, provide:
 
 1. **Observable outcome** — behavior reachable through a browser, CLI, tool, `curl`, or another realistic interface.
 2. **End-to-end changes** — the minimal contract, client/UI, orchestration, service, and persistence work.
 3. **Files** — concrete paths expected to change.
 4. **Verification** — focused automated checks and a manual demonstration when possible.
-5. **Review gate** — implement the slice, summarize behavior and checks, then wait for human review.
+5. **Review gate** — implement the plan, summarize behavior and checks, then wait for human review.
 
-Prefer an order that makes behavior testable early. Keep slices small enough that feedback can change remaining work without discarding a large implementation. List dependencies between slices.
+Keep tasks specific, list their dependencies, and avoid restating the approved design. These five elements apply to the overall plan, not to each task. Do not require a human review gate after every task unless the user requests it.
 
 ## Phase 5: Final Review
 
 Before presenting the final plan:
 
 1. Re-read critical files and verify assumptions.
-2. Confirm every slice conforms to the approved architecture and program design.
+2. Confirm every task conforms to the approved architecture and program design.
 3. Cover edge cases, compatibility, migrations, and user-visible behavior.
 4. Keep scope explicit and identify files that must remain untouched.
 
-Include the approved architecture and program-design artifacts, ordered slices, assumptions, and end-to-end verification. State that implementation proceeds one approved slice at a time, runs that slice's checks, summarizes results, stops for review, revises remaining slices when feedback changes design, and returns to plan mode when architecture changes.
+Include the approved architecture and program-design artifacts, ordered tasks, assumptions, and overall verification. Implementation follows the approved plan and runs the relevant checks without mandatory pauses between tasks. Summarize behavior and checks when complete, then wait for human review. If new findings require changing the approved design or scope, pause for clarification and return to plan mode when architecture changes.
 
 Only after presenting this final plan should the agent call `plan_exit`.
