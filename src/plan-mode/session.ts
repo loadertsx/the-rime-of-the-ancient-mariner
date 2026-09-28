@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { SUBAGENT_TOOL_NAMES } from "../subagents/session.js";
+import { UPDATE_PLAN_TOOL } from "../tasks/model.js";
 import { isReadOnlyBashCommand } from "./bash-safety.ts";
 import {
 	PLAN_MODE_LABEL,
@@ -27,6 +28,7 @@ const READ_ONLY_TOOLS = [
 	"get_memory",
 	"list_memories",
 	"count_lines",
+	UPDATE_PLAN_TOOL,
 	PLAN_EXIT_TOOL,
 ];
 
@@ -309,7 +311,7 @@ export function openPlanModeSession(pi: ExtensionAPI, options: PlanModeOptions):
 				{
 					customType: "plan-mode-execute",
 					content:
-						"The user approved the plan. Plan mode is off. Begin implementing the approved plan, respecting its scope and review checkpoints. Implement only the first approved vertical slice, run its checks, summarize the changes, and stop for human review before continuing.",
+						"The user approved the plan. Plan mode is off. Implement the approved plan, respecting its scope. Keep task statuses updated with update_plan when available, run the relevant checks, then summarize behavior and verification results and stop for human review. Do not pause after every task. If findings require changing the approved design or scope, pause for clarification.",
 					display: true,
 				},
 				{ triggerTurn: true, deliverAs: "followUp" },

@@ -21,6 +21,7 @@ import memoryExtension from "../../extensions/memory-extension.ts";
 import sessionExtension from "../../extensions/session-extension.ts";
 import planModeExtension from "../../extensions/plan-mode.ts";
 import subAgentsExtension from "../../extensions/subagents-extension.ts";
+import tasksExtension from "../../extensions/tasks-extension.ts";
 
 export default function (pi: ExtensionAPI) {
  sessionExtension(pi);
@@ -28,6 +29,7 @@ export default function (pi: ExtensionAPI) {
  lifeCycleExtension(pi, { discoverResources: true });
  subAgentsExtension(pi);
  planModeExtension(pi);
+ tasksExtension(pi);
 }
 ```
 
@@ -64,6 +66,14 @@ For local testing, remap the built-in thinking shortcuts in `~/.pi/agent/keybind
 ```
 
 Run `/reload` in pi after changing keybindings. This keeps `Ctrl+V` for paste-image on macOS, uses `Ctrl+T` to cycle thinking level, and frees `Shift+Tab` for plan mode.
+
+## Implementation Tasks
+
+`update_plan` publishes a complete task snapshot with stable IDs, English titles, and statuses (`pending`, `in_progress`, `done`, `blocked`). An empty list clears the widget. It updates session metadata only and is available during plan mode without enabling project writes.
+
+The English checkbox preview appears above the editor and remains visible during implementation. `/tasks` opens the complete read-only list. State follows the active session branch; completed tasks remain visible until cleared or replaced.
+
+After `/reload`, ask the agent to publish a short task list, change one status, and clear it. Also check a long list in a short/narrow terminal, resume the session, and navigate to an earlier branch to verify restoration. Plan approval should preserve the tasks and no longer request a pause after each task.
 
 ## Verification
 

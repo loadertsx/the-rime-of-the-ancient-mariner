@@ -15,6 +15,7 @@ function createHarness(
 		"list_available_subagents",
 		"subagent_execute",
 		"plan_exit",
+		"update_plan",
 	];
 	let activeTools = [...toolNames];
 	const entries: Array<{ type: string; customType: string; data: unknown }> = [];
@@ -125,7 +126,7 @@ describe("openPlanModeSession", () => {
 		expect(messages[0].message).toEqual({
 			customType: "plan-mode-execute",
 			content:
-				"The user approved the plan. Plan mode is off. Begin implementing the approved plan, respecting its scope and review checkpoints. Implement only the first approved vertical slice, run its checks, summarize the changes, and stop for human review before continuing.",
+				"The user approved the plan. Plan mode is off. Implement the approved plan, respecting its scope. Keep task statuses updated with update_plan when available, run the relevant checks, then summarize behavior and verification results and stop for human review. Do not pause after every task. If findings require changing the approved design or scope, pause for clarification.",
 			display: true,
 		});
 		expect(messages[0].options).toEqual({ triggerTurn: true, deliverAs: "followUp" });
@@ -133,6 +134,16 @@ describe("openPlanModeSession", () => {
 		expect(messages[0].activeTools).toContain("write");
 		expect(messages[0].activeTools).not.toContain("plan_exit");
 		expect(session.blockToolCall({ toolName: "write", input: {} })).toBeUndefined();
+	});
+
+	test("task metadata updates remain available during and after planning", () => {
+		const { session, ctx, activeTools } = createHarness();
+		session.handleCommand("on", ctx);
+		expect(activeTools()).toContain("update_plan");
+		expect(session.blockToolCall({ toolName: "update_plan", input: {} })).toBeUndefined();
+		expect(activeTools()).not.toContain("write");
+		session.handleCommand("off", ctx);
+		expect(activeTools()).toContain("update_plan");
 	});
 
 	test("rejection or cancellation keeps planning active without execution", async () => {
