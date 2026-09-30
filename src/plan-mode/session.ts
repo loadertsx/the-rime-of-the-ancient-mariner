@@ -311,7 +311,7 @@ export function openPlanModeSession(pi: ExtensionAPI, options: PlanModeOptions):
 				{
 					customType: "plan-mode-execute",
 					content:
-						"The user approved the plan. Plan mode is off. Implement the approved plan, respecting its scope. Keep task statuses updated with update_plan when available, run the relevant checks, then summarize behavior and verification results and stop for human review. Do not pause after every task. If findings require changing the approved design or scope, pause for clarification.",
+						"The user approved the entire plan. Plan mode is off. Implement all approved tasks in dependency order, respecting the plan's scope. Do not ask for per-task review or approval: after completing a task, update its status and continue to the next task. Keep the progress widget current with update_plan when available and run the relevant checks. Only after the full implementation, summarize behavior and verification results for human review. If findings require changing the approved design or scope, pause for clarification.",
 					display: true,
 				},
 				{ triggerTurn: true, deliverAs: "followUp" },

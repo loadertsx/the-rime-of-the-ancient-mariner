@@ -108,9 +108,9 @@ For the implementation as a whole, provide:
 2. **End-to-end changes** — the minimal contract, client/UI, orchestration, service, and persistence work.
 3. **Files** — concrete paths expected to change.
 4. **Verification** — focused automated checks and a manual demonstration when possible.
-5. **Review gate** — implement the plan, summarize behavior and checks, then wait for human review.
+5. **Review gate** — present the complete task list as part of the final plan for approval. Once the user approves the plan, implement all its tasks without requesting individual task approvals. Summarize behavior and checks for review only after the full implementation.
 
-Keep tasks specific, list their dependencies, and avoid restating the approved design. These five elements apply to the overall plan, not to each task. Do not require a human review gate after every task unless the user requests it.
+Keep tasks specific, list their dependencies, and avoid restating the approved design. These five elements apply to the overall plan, not to each task. Tasks are a progress checklist, not separate review checkpoints. Completing a task means updating its status and continuing to the next task, not waiting for user confirmation.
 
 ## Phase 5: Final Review
 
@@ -121,6 +121,6 @@ Before presenting the final plan:
 3. Cover edge cases, compatibility, migrations, and user-visible behavior.
 4. Keep scope explicit and identify files that must remain untouched.
 
-Include the approved architecture and program-design artifacts, ordered tasks, assumptions, and overall verification. Implementation follows the approved plan and runs the relevant checks without mandatory pauses between tasks. Summarize behavior and checks when complete, then wait for human review. If new findings require changing the approved design or scope, pause for clarification and return to plan mode when architecture changes.
+Include the approved architecture and program-design artifacts, ordered tasks, assumptions, and overall verification. Approval of the final plan authorizes implementation of all its tasks. Execute them in dependency order, run the relevant checks, and keep the task widget updated without asking for per-task review or approval. Summarize behavior and checks when complete, then wait for human review. If new findings require changing the approved design or scope, pause for clarification and return to plan mode when architecture changes.
 
 Only after presenting this final plan should the agent call `plan_exit`.
