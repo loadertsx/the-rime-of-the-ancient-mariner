@@ -1,68 +1,36 @@
 import { readFile } from "node:fs/promises";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { SUBAGENT_TOOL_NAMES } from "../subagents/session.js";
-import { UPDATE_PLAN_TOOL } from "../tasks/model.js";
-import { isReadOnlyBashCommand } from "./bash-safety.ts";
 import {
-	PLAN_MODE_LABEL,
+	PLAN_EXIT_TOOL,
+	type PlanToolState,
+	type ToolAvailability,
+} from "../tools/availability.ts";
+import {
 	type PlanModeEditorFactory,
 	createPlanModeEditorFactory,
 	planModeMuted,
-	planModeTitle,
 } from "./editor.ts";
 import { buildPlanInfo, renderPlanPrompt } from "./prompt.ts";
 
 const STATE_ENTRY_TYPE = "plan-mode-state";
-export const PLAN_EXIT_TOOL = "plan_exit";
-
-const READ_ONLY_TOOLS = [
-	"read",
-	"grep",
-	"find",
-	"ls",
-	"bash",
-	"question",
-	"questionnaire",
-	"get_current_session",
-	"get_memory",
-	"list_memories",
-	"count_lines",
-	UPDATE_PLAN_TOOL,
-	PLAN_EXIT_TOOL,
-];
-
 export interface PlanModeOptions {
 	systemPromptPath: string;
 }
 
-export interface PlanModeState {
-	enabled: boolean;
-	savedActiveTools?: string[];
+export interface PlanModeState extends PlanToolState {
 	exitRequested?: boolean;
-}
-
-export interface PlanModeToolCall {
-	toolName: string;
-	input: unknown;
 }
 
 export interface PlanModeBeforeAgentStart {
 	systemPrompt: string;
 }
 
-export interface ToolBlockResult {
-	block: true;
-	reason: string;
-}
-
 export interface PlanModeSession {
 	planExitTool(): Parameters<ExtensionAPI["registerTool"]>[0];
 	handleCommand(args: string, ctx: ExtensionContext): void;
 	restore(ctx: ExtensionContext, startEnabled: boolean): void;
-	setSubagentsEnabled(enabled: boolean): void;
 	beforeAgentStart(event: PlanModeBeforeAgentStart): Promise<{ systemPrompt: string } | undefined>;
-	blockToolCall(event: PlanModeToolCall): ToolBlockResult | undefined;
 	handleAgentSettled(ctx: ExtensionContext): Promise<void>;
 }
 
@@ -72,40 +40,18 @@ interface CustomEntryLike {
 	data?: unknown;
 }
 
-export function openPlanModeSession(pi: ExtensionAPI, options: PlanModeOptions): PlanModeSession {
+export function openPlanModeSession(
+	pi: ExtensionAPI,
+	options: PlanModeOptions,
+	availability: ToolAvailability,
+): PlanModeSession {
 	let enabled = false;
-	let savedActiveTools: string[] | undefined;
 	let savedEditorComponent: PlanModeEditorFactory | undefined;
 	let hasPlanModeEditor = false;
 	let exitRequested = false;
-	let subagentsEnabled = false;
 
 	function saveState(): void {
-		pi.appendEntry(STATE_ENTRY_TYPE, { enabled, savedActiveTools, exitRequested });
-	}
-
-	function availableTools(names: readonly string[]): string[] {
-		const available = new Set(pi.getAllTools().map((tool) => tool.name));
-		return names.filter((name) => available.has(name));
-	}
-
-	function readOnlyTools(): string[] {
-		return [...READ_ONLY_TOOLS, ...(subagentsEnabled ? availableTools(SUBAGENT_TOOL_NAMES) : [])];
-	}
-
-	function syncSavedSubagentTools(): void {
-		if (!savedActiveTools) return;
-
-		const subagentTools = new Set<string>(SUBAGENT_TOOL_NAMES);
-		savedActiveTools = savedActiveTools.filter((name) => !subagentTools.has(name));
-		if (subagentsEnabled) {
-			savedActiveTools.push(...availableTools(SUBAGENT_TOOL_NAMES));
-		}
-	}
-
-	function captureSavedTools(): void {
-		savedActiveTools = pi.getActiveTools().filter((name) => name !== PLAN_EXIT_TOOL);
-		syncSavedSubagentTools();
+		pi.appendEntry(STATE_ENTRY_TYPE, { ...availability.planState(), exitRequested });
 	}
 
 	function installPlanModeEditor(ctx: ExtensionContext): void {
@@ -146,12 +92,9 @@ export function openPlanModeSession(pi: ExtensionAPI, options: PlanModeOptions):
 	}
 
 	function enter(ctx: ExtensionContext, notify = true): void {
-		if (!enabled) {
-			captureSavedTools();
-		}
+		availability.update({ planMode: true });
 		enabled = true;
 		exitRequested = false;
-		pi.setActiveTools(availableTools(readOnlyTools()));
 		saveState();
 		refreshUi(ctx);
 		if (notify && ctx.hasUI) {
@@ -164,12 +107,7 @@ export function openPlanModeSession(pi: ExtensionAPI, options: PlanModeOptions):
 		enabled = false;
 		exitRequested = false;
 
-		if (wasEnabled) {
-			const restoreList = savedActiveTools ?? pi.getAllTools().map((tool) => tool.name);
-			pi.setActiveTools(availableTools(restoreList).filter((name) => name !== PLAN_EXIT_TOOL));
-		}
-
-		savedActiveTools = undefined;
+		availability.update({ planMode: false });
 		saveState();
 		refreshUi(ctx);
 
@@ -189,33 +127,16 @@ export function openPlanModeSession(pi: ExtensionAPI, options: PlanModeOptions):
 			.filter((entry) => entry.type === "custom" && entry.customType === STATE_ENTRY_TYPE)
 			.pop()?.data as PlanModeState | undefined;
 
-		if (restored) {
-			enabled = restored.enabled;
-			savedActiveTools = restored.savedActiveTools;
-			exitRequested = restored.exitRequested ?? false;
-		}
-
+		enabled = restored?.enabled ?? false;
+		exitRequested = restored?.exitRequested ?? false;
+		availability.restorePlanMode(restored ?? { enabled: false });
 		if (startEnabled) {
-			if (!enabled) {
-				captureSavedTools();
-			}
+			availability.update({ planMode: true });
 			enabled = true;
-		}
-
-		syncSavedSubagentTools();
-		if (enabled) {
-			pi.setActiveTools(availableTools(readOnlyTools()));
-		}
-		refreshUi(ctx);
-	}
-
-	function setSubagentsEnabled(nextEnabled: boolean): void {
-		subagentsEnabled = nextEnabled;
-		syncSavedSubagentTools();
-		if (enabled) {
-			pi.setActiveTools(availableTools(readOnlyTools()));
+			// A startup-only entry must retain the original selection across reload.
 			saveState();
 		}
+		refreshUi(ctx);
 	}
 
 	function handleCommand(args: string, ctx: ExtensionContext): void {
@@ -233,7 +154,7 @@ export function openPlanModeSession(pi: ExtensionAPI, options: PlanModeOptions):
 			case "status":
 				ctx.ui.notify(
 					enabled
-						? `Plan mode is active. Tools: ${availableTools(readOnlyTools()).join(", ")}`
+						? `Plan mode is active. Tools: ${pi.getActiveTools().join(", ")}`
 						: "Plan mode is inactive.",
 					"info",
 				);
@@ -256,30 +177,6 @@ export function openPlanModeSession(pi: ExtensionAPI, options: PlanModeOptions):
 		return {
 			systemPrompt: `${event.systemPrompt}\n\n${renderedPrompt}`,
 		};
-	}
-
-	function blockToolCall(event: PlanModeToolCall): ToolBlockResult | undefined {
-		if (!enabled) return undefined;
-
-		if (!readOnlyTools().includes(event.toolName)) {
-			return {
-				block: true,
-				reason: `Plan mode blocks the ${event.toolName} tool. Only read-only tools are available.`,
-			};
-		}
-
-		if (event.toolName !== "bash") return undefined;
-
-		const input = event.input as Record<string, unknown>;
-		const command = input.command;
-		if (typeof command !== "string" || !isReadOnlyBashCommand(command)) {
-			return {
-				block: true,
-				reason: `Plan mode blocks unsafe bash commands. Command: ${String(command)}`,
-			};
-		}
-
-		return undefined;
 	}
 
 	async function handleAgentSettled(ctx: ExtensionContext): Promise<void> {
@@ -359,9 +256,7 @@ export function openPlanModeSession(pi: ExtensionAPI, options: PlanModeOptions):
 		planExitTool,
 		handleCommand,
 		restore,
-		setSubagentsEnabled,
 		beforeAgentStart,
-		blockToolCall,
 		handleAgentSettled,
 	};
 }

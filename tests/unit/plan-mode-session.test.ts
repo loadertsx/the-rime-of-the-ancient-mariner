@@ -1,8 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import {
+	type ExtensionAPI,
+	type ExtensionContext,
+	createEventBus,
+} from "@earendil-works/pi-coding-agent";
 import planModeExtension from "../../extensions/plan-mode.ts";
 import { openPlanModeSession } from "../../src/plan-mode/session.ts";
+import { createToolAvailability } from "../../src/tools/availability.ts";
 
 function createHarness(
 	options: { hasUI?: boolean; approved?: boolean; systemPromptPath?: string } = {},
@@ -26,6 +31,7 @@ function createHarness(
 	}> = [];
 	const confirmations: string[] = [];
 	const pi = {
+		events: createEventBus(),
 		sendMessage(
 			message: Parameters<ExtensionAPI["sendMessage"]>[0],
 			options: Parameters<ExtensionAPI["sendMessage"]>[1],
@@ -57,15 +63,19 @@ function createHarness(
 		sessionManager: { getBranch: () => entries },
 	} as unknown as ExtensionContext;
 
+	const availability = createToolAvailability(pi);
 	return {
+		availability,
 		activeTools: () => activeTools,
 		messages,
 		pi,
 		confirmations,
 		ctx,
-		session: openPlanModeSession(pi, {
-			systemPromptPath: options.systemPromptPath ?? "/unused/plan-system.md",
-		}),
+		session: openPlanModeSession(
+			pi,
+			{ systemPromptPath: options.systemPromptPath ?? "/unused/plan-system.md" },
+			availability,
+		),
 	};
 }
 
@@ -86,7 +96,6 @@ describe("openPlanModeSession", () => {
 				exitTool = tool;
 			},
 			getFlag: () => true,
-			events: { on() {} },
 			on(name: string, handler: (event: unknown, ctx: ExtensionContext) => Promise<void>) {
 				handlers.set(name, handler);
 			},
@@ -113,7 +122,7 @@ describe("openPlanModeSession", () => {
 
 	test("approval restores tools before starting implementation exactly once", async () => {
 		const harness = createHarness({ hasUI: true, approved: true });
-		const { session, ctx, messages, confirmations } = harness;
+		const { session, ctx, messages, confirmations, availability } = harness;
 		session.handleCommand("on", ctx);
 		await requestExit(harness);
 		expect(messages).toHaveLength(0);
@@ -133,14 +142,14 @@ describe("openPlanModeSession", () => {
 		expect(messages[0].activeTools).toContain("edit");
 		expect(messages[0].activeTools).toContain("write");
 		expect(messages[0].activeTools).not.toContain("plan_exit");
-		expect(session.blockToolCall({ toolName: "write", input: {} })).toBeUndefined();
+		expect(availability.blockToolCall({ toolName: "write", input: {} })).toBeUndefined();
 	});
 
 	test("task metadata updates remain available during and after planning", () => {
-		const { session, ctx, activeTools } = createHarness();
+		const { session, ctx, activeTools, availability } = createHarness();
 		session.handleCommand("on", ctx);
 		expect(activeTools()).toContain("update_plan");
-		expect(session.blockToolCall({ toolName: "update_plan", input: {} })).toBeUndefined();
+		expect(availability.blockToolCall({ toolName: "update_plan", input: {} })).toBeUndefined();
 		expect(activeTools()).not.toContain("write");
 		session.handleCommand("off", ctx);
 		expect(activeTools()).toContain("update_plan");
@@ -203,68 +212,5 @@ describe("openPlanModeSession", () => {
 			"Approval of the final plan authorizes implementation of all its tasks.",
 		);
 		expect(result?.systemPrompt).toContain("without asking for per-task review or approval");
-	});
-
-	test("does not enable subagent tools when entering plan mode", () => {
-		const { activeTools, ctx, session } = createHarness();
-
-		session.handleCommand("on", ctx);
-
-		expect(activeTools()).not.toContain("list_available_subagents");
-		expect(activeTools()).not.toContain("subagent_execute");
-		expect(activeTools()).not.toContain("edit");
-		expect(activeTools()).not.toContain("write");
-		expect(session.blockToolCall({ toolName: "list_available_subagents", input: {} })).toEqual({
-			block: true,
-			reason:
-				"Plan mode blocks the list_available_subagents tool. Only read-only tools are available.",
-		});
-	});
-
-	test("keeps enabled subagent tools available with plan-mode restrictions", () => {
-		const { activeTools, ctx, session } = createHarness();
-		session.setSubagentsEnabled(true);
-
-		session.handleCommand("on", ctx);
-
-		expect(activeTools()).toContain("list_available_subagents");
-		expect(activeTools()).toContain("subagent_execute");
-		expect(activeTools()).not.toContain("edit");
-		expect(activeTools()).not.toContain("write");
-		expect(
-			session.blockToolCall({ toolName: "list_available_subagents", input: {} }),
-		).toBeUndefined();
-		expect(session.blockToolCall({ toolName: "subagent_execute", input: {} })).toBeUndefined();
-	});
-
-	test("updates subagent tools immediately while plan mode is active", () => {
-		const { activeTools, ctx, session } = createHarness();
-		session.handleCommand("on", ctx);
-
-		session.setSubagentsEnabled(true);
-		expect(activeTools()).toContain("list_available_subagents");
-		expect(activeTools()).toContain("subagent_execute");
-
-		session.setSubagentsEnabled(false);
-		expect(activeTools()).not.toContain("list_available_subagents");
-		expect(activeTools()).not.toContain("subagent_execute");
-	});
-
-	test("preserves the latest subagent state when leaving plan mode", () => {
-		const { activeTools, ctx, session } = createHarness();
-		session.handleCommand("on", ctx);
-		session.setSubagentsEnabled(true);
-
-		session.handleCommand("off", ctx);
-
-		expect(activeTools()).toContain("list_available_subagents");
-		expect(activeTools()).toContain("subagent_execute");
-
-		session.handleCommand("on", ctx);
-		session.setSubagentsEnabled(false);
-		session.handleCommand("off", ctx);
-
-		expect(activeTools()).not.toContain("list_available_subagents");
-		expect(activeTools()).not.toContain("subagent_execute");
 	});
 });

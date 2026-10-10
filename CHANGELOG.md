@@ -15,6 +15,7 @@
 - Session-backed implementation task tracking through `update_plan`, with stable IDs, English titles, and `pending`, `in_progress`, `done`, and `blocked` statuses.
 - Responsive task progress widget, read-only `/tasks` browser, task restoration on session/branch changes, and task context injection. Tracking does not approve plans or enable writes.
 - Unit and SQLite integration test suites, `test`, `test:unit`, and `test:integration` scripts, and test execution in the pre-commit hook.
+- Tool-policy tests and extension-composition integration tests covering both load orders, independent loading, read-only delegation, reload, runtime isolation, and Pi's file loader.
 
 ### Changed
 
@@ -27,6 +28,8 @@
 - Replaced the `/plan` prompt template with a compact internal plan-mode system prompt, moving detailed planning guidance into the `plan-design-guide` skill.
 - Replaced Mermaid diagrams with plain-text visuals in planning and research guidance.
 - Replaced vertical slices and per-slice review gates with dependency-ordered implementation tasks and review after the full approved plan is implemented.
+- Centralized active-tool selection, call restrictions, tool restoration, and delegated subagent access in a shared `ToolAvailability` module. Plan mode and subagents remain independently loadable; delegated access now follows explicit plan-mode state instead of the presence of `plan_exit`.
+- Scoped the shared policy to each extension runtime, acquiring it through `pi.events` and removing its acquisition listener on session shutdown.
 
 ### Fixed
 
@@ -34,12 +37,14 @@
 - Kept subagent discovery and execution available in plan mode while restricting child sessions to native read-only tools.
 - Deferred plan-exit confirmation until the agent settles, then restored write-capable tools and automatically started approved implementation in a follow-up turn.
 - Clarified that final plan approval authorizes all its tasks: update progress and continue without per-task approval, pausing only when findings require changes to the approved design or scope.
+- Preserved the original tool selection across reload when starting with `--with-plan`.
 
 ### Documentation
 
 - Documented the searchable memory library, subagent tools and cwd-scoped preferences, and local extension setup.
 - Added plan-mode keybinding setup instructions, including remapping pi's conflicting default `Shift+Tab` binding.
 - Updated agent architecture guidance and added domain and issue-tracker documentation.
+- Added a domain glossary and documented tool-availability ownership, runtime sharing, and snapshot restoration.
 
 ## [0.1.1] - 2026-06-07
 
