@@ -65,10 +65,12 @@ Supported `sessionType` values are `implementation`, `code-exploration`, `implem
 | `/recent-memories` | Open the searchable memory library and send selected memories to the LLM |
 | `/session-info` | Print current session metadata (ID, file, name, CWD, entries) |
 | `/plan-mode [on\|off\|toggle\|status]` | Toggle native read-only plan mode |
-| `/subagents` | Toggle subagent tools and persist the choice for future sessions |
+| `/subagents` | Toggle subagent tools and persist the choice for future sessions in the current cwd |
 | `--subagents` | Force-enable subagent tools for the current session without changing the saved choice |
 | `Shift+Tab` | Toggle native read-only plan mode, if `Shift+Tab` is not already bound to a built-in pi action |
 | `--with-plan` (flag) | Start pi with plan mode enabled from the start |
+
+Subagent preferences use Pi's exact absolute cwd: subdirectories, worktrees, and symlink paths have independent choices. A cwd without a saved preference starts disabled; the former global preference is not inherited.
 
 ### Memory Library
 
