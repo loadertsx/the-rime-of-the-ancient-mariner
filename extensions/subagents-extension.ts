@@ -7,7 +7,7 @@ import { createSubagentsOrchestrator } from "../src/subagents/subagents-orchestr
 
 export default function subAgentsExtension(pi: ExtensionAPI) {
 	pi.registerFlag("subagents", {
-		description: "Enable subagent tools at startup",
+		description: "Enable subagent tools at startup without changing the saved cwd preference",
 		type: "boolean",
 		default: false,
 	});
@@ -67,7 +67,7 @@ export default function subAgentsExtension(pi: ExtensionAPI) {
 	});
 
 	pi.registerCommand("subagents", {
-		description: "Toggle subagent tools",
+		description: "Toggle subagent tools and save the choice for the current cwd",
 		handler: async (_args, ctx) => subagents.toggle(ctx),
 	});
 

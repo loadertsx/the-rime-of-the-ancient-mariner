@@ -2,34 +2,34 @@ import { eq } from "drizzle-orm";
 import { openDb } from "../db/connection.ts";
 import { subagentPreferences } from "./schema.ts";
 
-/** Stores the user's global choice for subagent tool availability. */
+/** Stores independent subagent availability choices for each exact cwd supplied by Pi. */
 export interface SubagentsPreference {
-	/** Returns false until the user has made and saved a choice. */
-	isEnabled(): boolean;
+	/** Returns false when this cwd has no saved choice. */
+	isEnabled(cwd: string): boolean;
 
-	/** Saves the choice, replacing any previous value. */
-	setEnabled(enabled: boolean): void;
+	/** Saves the choice for this cwd without affecting other directories. */
+	setEnabled(cwd: string, enabled: boolean): void;
 }
 
 export function openSubagentsPreference(path?: string): SubagentsPreference {
 	const db = openDb(path);
 
 	return {
-		isEnabled() {
+		isEnabled(cwd) {
 			return (
 				db
 					.select({ enabled: subagentPreferences.enabled })
 					.from(subagentPreferences)
-					.where(eq(subagentPreferences.id, 1))
+					.where(eq(subagentPreferences.cwd, cwd))
 					.get()?.enabled ?? false
 			);
 		},
 
-		setEnabled(enabled) {
+		setEnabled(cwd, enabled) {
 			db.insert(subagentPreferences)
-				.values({ id: 1, enabled })
+				.values({ cwd, enabled })
 				.onConflictDoUpdate({
-					target: subagentPreferences.id,
+					target: subagentPreferences.cwd,
 					set: { enabled, updatedAt: new Date() },
 				})
 				.run();

@@ -64,13 +64,13 @@ export function openSubagentsSession(
 	}
 
 	function restore(ctx: ExtensionContext, startEnabled: boolean): void {
-		enabled = startEnabled || preference.isEnabled();
+		enabled = startEnabled || preference.isEnabled(ctx.cwd);
 		apply(ctx);
 	}
 
 	function toggle(ctx: ExtensionContext): void {
 		const nextEnabled = !enabled;
-		preference.setEnabled(nextEnabled);
+		preference.setEnabled(ctx.cwd, nextEnabled);
 		enabled = nextEnabled;
 		apply(ctx);
 		if (ctx.hasUI) {

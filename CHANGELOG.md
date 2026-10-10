@@ -2,18 +2,51 @@
 
 ## Unreleased
 
+## [0.2.0] - 2026-10-10
+
+### Added
+
+- Prompt-based subagents with `list_available_subagents` and `subagent_execute`, plus a `subagent-codebase-search` prompt for isolated codebase research.
+- Validated subagent prompt paths, isolated pi child processes, cancellation support, bounded output, failure diagnostics, and notifications when execution starts. Subagents use the full built-in coding tool set outside plan mode.
+- `/subagents` runtime toggle, an on/off status indicator, and `--subagents` to enable subagents for the current session without changing the saved preference.
+- Persistent subagent availability per exact project cwd. New directories default to disabled; subdirectories, worktrees, and symlink paths have independent preferences, and the former global preference is not inherited.
+- `Shift+Tab` shortcut to toggle plan mode and a custom editor border for its active state.
+- Collaborative planning with explicit System Architecture and Program Design approval checkpoints, plus a `plan-design-guide` skill for detailed planning artifacts.
+- Session-backed implementation task tracking through `update_plan`, with stable IDs, English titles, and `pending`, `in_progress`, `done`, and `blocked` statuses.
+- Responsive task progress widget, read-only `/tasks` browser, task restoration on session/branch changes, and task context injection. Tracking does not approve plans or enable writes.
+- Unit and SQLite integration test suites, `test`, `test:unit`, and `test:integration` scripts, and test execution in the pre-commit hook.
+
 ### Changed
 
+- Replaced the paginated `/recent-memories` picker with a searchable memory library featuring live previews, current-project/all-project scoping, and multi-selection preserved across searches.
+- Added token-based search over memory names, projects, descriptions, and tags, with single-token fuzzy fallback. The library searches the newest 500 memories and shows loaded/total counts when applicable.
+- Made the memory browser responsive to terminal dimensions, with side-by-side or stacked previews, pi keybindings, and live theme updates.
+- Split memory persistence, browsing projections, and library use cases into `MemoryRepository`, `MemoryCatalog`, and `MemoryLibrary`; moved session memory operations into `SessionMemory`.
+- Replaced the legacy search-only subagent runner with a shared prompt-discovery and execution orchestrator, and added guidance to delegate matching tasks to available subagents.
 - Renamed the plan-mode startup flag from `--plan` to `--with-plan`; the old flag is no longer accepted.
+- Replaced the `/plan` prompt template with a compact internal plan-mode system prompt, moving detailed planning guidance into the `plan-design-guide` skill.
+- Replaced Mermaid diagrams with plain-text visuals in planning and research guidance.
+- Replaced vertical slices and per-slice review gates with dependency-ordered implementation tasks and review after the full approved plan is implemented.
 
 ### Fixed
 
+- Prevented loading or recalling memories from triggering session-summary saves; saving requires an explicit user request.
 - Kept subagent discovery and execution available in plan mode while restricting child sessions to native read-only tools.
+- Deferred plan-exit confirmation until the agent settles, then restored write-capable tools and automatically started approved implementation in a follow-up turn.
+- Clarified that final plan approval authorizes all its tasks: update progress and continue without per-task approval, pausing only when findings require changes to the approved design or scope.
+
+### Documentation
+
+- Documented the searchable memory library, subagent tools and cwd-scoped preferences, and local extension setup.
+- Added plan-mode keybinding setup instructions, including remapping pi's conflicting default `Shift+Tab` binding.
+- Updated agent architecture guidance and added domain and issue-tracker documentation.
 
 ## [0.1.1] - 2026-06-07
 
-- update root for creation of database
-- lifecycle discover prompts and skills only in local dev mode  
+### Fixed
+
+- Moved the default memory database to the global pi agent directory.
+- Restricted lifecycle prompt and skill discovery to local development to avoid duplicate package resources.
 
 ## [0.1.0] - 2026-06-03
 

@@ -88,3 +88,13 @@ Then run pi loading just that entrypoint:
 ```bash
 pi --extension .pi/extensions/index.ts
 ```
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues for `Nahuelluca20/the-rime-of-the-ancient-mariner`, accessed via `gh`. See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Single-context layout: root `GLOSSARY.md` and `docs/adr/`. See `docs/agents/domain.md`.

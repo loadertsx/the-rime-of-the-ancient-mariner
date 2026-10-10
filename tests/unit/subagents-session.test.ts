@@ -9,9 +9,9 @@ import {
 function createHarness(hasUI = true, preferenceEnabled = false) {
 	const toolNames = ["read", "list_available_subagents", "subagent_execute"];
 	let activeTools = [...toolNames];
-	let savedPreference = preferenceEnabled;
+	const savedPreferences = new Map<string, boolean>([["/projects/api", preferenceEnabled]]);
 	let preferenceError: Error | undefined;
-	const preferenceWrites: boolean[] = [];
+	const preferenceWrites: Array<[string, boolean]> = [];
 	const statuses: Array<[string, string | undefined]> = [];
 	const notifications: Array<[string, string | undefined]> = [];
 	const events: Array<[string, unknown]> = [];
@@ -29,6 +29,7 @@ function createHarness(hasUI = true, preferenceEnabled = false) {
 		},
 	} as unknown as ExtensionAPI;
 	const ctx = {
+		cwd: "/projects/api",
 		hasUI,
 		ui: {
 			notify(message: string, level?: string) {
@@ -41,11 +42,11 @@ function createHarness(hasUI = true, preferenceEnabled = false) {
 	} as unknown as ExtensionContext;
 
 	const preference: SubagentsPreference = {
-		isEnabled: () => savedPreference,
-		setEnabled(enabled) {
+		isEnabled: (cwd) => savedPreferences.get(cwd) ?? false,
+		setEnabled(cwd, enabled) {
 			if (preferenceError) throw preferenceError;
-			savedPreference = enabled;
-			preferenceWrites.push(enabled);
+			savedPreferences.set(cwd, enabled);
+			preferenceWrites.push([cwd, enabled]);
 		},
 	};
 
@@ -96,12 +97,15 @@ describe("openSubagentsSession", () => {
 
 		session.toggle(ctx);
 		expect(activeTools()).toEqual(["read", "list_available_subagents", "subagent_execute"]);
-		expect(preferenceWrites).toEqual([true]);
+		expect(preferenceWrites).toEqual([[ctx.cwd, true]]);
 		expect(notifications.at(-1)).toEqual(["Subagents enabled.", "info"]);
 
 		session.toggle(ctx);
 		expect(activeTools()).toEqual(["read"]);
-		expect(preferenceWrites).toEqual([true, false]);
+		expect(preferenceWrites).toEqual([
+			[ctx.cwd, true],
+			[ctx.cwd, false],
+		]);
 		expect(notifications.at(-1)).toEqual(["Subagents disabled.", "info"]);
 	});
 
@@ -140,6 +144,41 @@ describe("openSubagentsSession", () => {
 		session.restore(ctx, false);
 
 		expect(activeTools()).toEqual(["read", "list_available_subagents", "subagent_execute"]);
+	});
+
+	test("restores and toggles independent choices for the current cwd", () => {
+		const { activeTools, ctx, preferenceWrites, session } = createHarness();
+		const otherCtx = { ...ctx, cwd: "/projects/web" };
+		session.restore(ctx, false);
+		session.toggle(ctx);
+
+		session.restore(otherCtx, false);
+		expect(activeTools()).toEqual(["read"]);
+		session.toggle(otherCtx);
+		session.toggle(otherCtx);
+		expect(preferenceWrites).toEqual([
+			[ctx.cwd, true],
+			[otherCtx.cwd, true],
+			[otherCtx.cwd, false],
+		]);
+
+		session.restore(ctx, false);
+		expect(activeTools()).toEqual(["read", "list_available_subagents", "subagent_execute"]);
+		session.restore(otherCtx, false);
+		expect(activeTools()).toEqual(["read"]);
+	});
+
+	test("startup flag is temporary and toggling saves the effective choice for that cwd", () => {
+		const { activeTools, ctx, preferenceWrites, session } = createHarness();
+		session.restore(ctx, true);
+		session.restore(ctx, false);
+		expect(activeTools()).toEqual(["read"]);
+		expect(preferenceWrites).toEqual([]);
+
+		session.restore(ctx, true);
+		session.toggle(ctx);
+		expect(activeTools()).toEqual(["read"]);
+		expect(preferenceWrites).toEqual([[ctx.cwd, false]]);
 	});
 
 	test("skips UI output when no UI is available", () => {
