@@ -67,6 +67,28 @@ For local testing, remap the built-in thinking shortcuts in `~/.pi/agent/keybind
 
 Run `/reload` in pi after changing keybindings. This keeps `Ctrl+V` for paste-image on macOS, uses `Ctrl+T` to cycle thinking level, and frees `Shift+Tab` for plan mode.
 
+## Tool Availability
+
+`src/tools/availability.ts` owns this package's active-tool selection, call restrictions,
+previous-tool restoration, and delegated subagent access. Plan mode and subagents pass
+state changes to it; neither writes the active-tool list directly.
+
+Both extensions acquire the same policy through `getToolAvailability(pi)`. Acquisition
+uses `pi.events` because independently loaded extensions do not share a `pi` object or
+necessarily share imported module instances. The first caller registers the shared
+policy and one `tool_call` handler. `session_shutdown` removes the acquisition listener
+so reload or session replacement cannot reuse the old runtime's policy. Either extension
+can still load independently.
+
+Plan mode continues to persist `plan-mode-state` entries with `enabled`,
+`savedActiveTools`, and `exitRequested`. Tool snapshots are detached copies; restoration
+combines the saved selection with the latest cwd preference rather than inheriting stale
+subagent tools. Preference changes do not require rewriting the plan snapshot.
+
+Tests inject the policy directly for session behavior, exercise tool combinations
+through its interface, and load both extension registrations together (including Pi's
+file loader) to verify composition and lifecycle. Run `bun run test` for both suites.
+
 ## Implementation Tasks
 
 `update_plan` publishes a complete task snapshot with stable IDs, English titles, and statuses (`pending`, `in_progress`, `done`, `blocked`). An empty list clears the widget. It updates session metadata only and is available during plan mode without enabling project writes.
