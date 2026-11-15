@@ -3,7 +3,7 @@ dist/
 *.log
 .DS_Store
 .pi/
-
+.env
 rime-ancient-mariner.db
 rime-ancient-mariner.db-journal
 rime-ancient-mariner.db-wal

@@ -22,6 +22,7 @@ import sessionExtension from "../../extensions/session-extension.ts";
 import planModeExtension from "../../extensions/plan-mode.ts";
 import subAgentsExtension from "../../extensions/subagents-extension.ts";
 import tasksExtension from "../../extensions/tasks-extension.ts";
+import voiceExtension from "../../extensions/voice-extension.ts";
 
 export default function (pi: ExtensionAPI) {
  sessionExtension(pi);
@@ -30,6 +31,7 @@ export default function (pi: ExtensionAPI) {
  subAgentsExtension(pi);
  planModeExtension(pi);
  tasksExtension(pi);
+ voiceExtension(pi);
 }
 ```
 
@@ -97,11 +99,45 @@ The English checkbox preview appears above the editor and remains visible during
 
 After `/reload`, ask the agent to publish a short task list, change one status, and clear it. Also check a long list in a short/narrow terminal, resume the session, and navigate to an earlier branch to verify restoration. Plan approval should preserve the tasks and no longer request a pause after each task.
 
+## Voice Input
+
+`extensions/voice-extension.ts` registers `/voice`, `/voice setup`, and `/voice-mic`. `src/voice/session.ts` owns command orchestration and cancellation, `recorder.ts` owns AVFoundation/FFmpeg process handling and bounded in-memory audio, `transcription.ts` uploads the in-memory WAV to OpenAI as multipart data, and `preferences.ts` stores the user-wide microphone choice outside the database. `src/ui/voice-dialog.ts` renders the inline recording screen.
+
+The extension starts no background work when loaded. It resolves the OpenAI key through pi's `getApiKeyForProvider("openai")`, uses `getAgentDir()` for preferences, and supports both the installed 0.75.x SDK and newer pi contexts (where `ctx.mode` is available). FFmpeg is a user-installed external dependency; no OpenAI npm SDK is needed.
+
+Capture uses `-f s16le pipe:1` for binary PCM rather than an audio-file path. The recorder constructs a complete WAV header after stopping because FFmpeg cannot finalize WAV sizes on a non-seekable output pipe. `RecordedAudio.bytes` is valid only until `AudioCapture.dispose()`, which zeroes the recorder's owned buffer and empties the result's byte view. The transcription module never accesses the filesystem. The five-minute, mono 16-kHz 16-bit limit also imposes a 9.6-MB PCM buffer cap; overflow and incomplete samples are rejected.
+
+Focused automated checks (fake recorder processes/HTTP requests; no microphone or paid API calls):
+
+```bash
+bun test tests/unit/voice-*.test.ts
+node --experimental-strip-types --test tests/integration/voice-*.test.ts
+```
+
+For an isolated interactive test:
+
+```bash
+pi --no-extensions --extension extensions/voice-extension.ts
+```
+
+Or add `voiceExtension(pi)` to your local `.pi/extensions/index.ts` as shown above and `/reload`. Installed packages already discover the file through `package.json["pi"].extensions`.
+
+Manual verification checklist, performed explicitly by the user:
+
+- Configure an OpenAI **API key**, install FFmpeg, then run `/voice setup`. Confirm it records/uploads nothing and does not claim the key or billing is validated.
+- Use `/voice-mic` to switch between the Mac microphone, AirPods, and System default. Confirm persistence after restarting pi and changing projects.
+- Run `/voice`, allow microphone permission, speak, and press Enter. Confirm the transcript appears for review and is not submitted automatically.
+- Cancel during startup, recording, and upload. Confirm the recorder exits, the draft remains unchanged, and the recorder buffer is released. No audio files should be created. Cancellation cannot retract audio already sent to OpenAI.
+- Disconnect the selected AirPods before capture. Confirm the picker opens instead of silently falling back; select another input and run `/voice` again.
+- Exercise permission denial, empty capture, missing FFmpeg/key, and API errors. Verify actionable errors and no secrets or raw API responses in notifications.
+- Check a short/narrow terminal, theme changes, five-minute automatic stop, graceful shutdown, and reload/session replacement cleanup.
+
 ## Verification
 
 | Step | Command |
 |------|---------|
 | Build | `bun run build` |
 | Lint | `bun run lint` |
+| Tests | `bun run test` |
 | DB migrations | `bun run db:generate` |
 | Interactive test | `pi --extension .pi/extensions/index.ts` |
