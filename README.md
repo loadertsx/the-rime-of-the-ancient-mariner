@@ -19,6 +19,7 @@
 | **Plan Mode** | Collaborative read-only planning through System Architecture, Program Design, and reviewable Vertical Slices |
 | **Subagents** | Discover prompt-based subagents and run them in isolated pi processes |
 | **Session Info** | Inspect session metadata (ID, file, name, CWD, entry count, leaf) |
+| **Voice Input (macOS)** | Record a prompt with FFmpeg, transcribe with OpenAI, and review it in the editor; switch microphones with `/voice-mic` |
 | **Prompts & Skills** | Planning, isolated codebase research, exploration, understanding, and typed summary prompts; `save-summary` skill |
 
 ## Installation
@@ -64,6 +65,9 @@ Supported `sessionType` values are `implementation`, `code-exploration`, `implem
 | `/update-info` | Update the current session's stored memory in place |
 | `/recent-memories` | Open the searchable memory library and send selected memories to the LLM |
 | `/session-info` | Print current session metadata (ID, file, name, CWD, entries) |
+| `/voice` | Record with the selected microphone and append the transcript to the editor for review |
+| `/voice setup` | Check voice prerequisites and show setup guidance without recording or uploading |
+| `/voice-mic` | Choose a microphone and remember it across projects and pi restarts |
 | `/plan-mode [on\|off\|toggle\|status]` | Toggle native read-only plan mode |
 | `/subagents` | Toggle subagent tools and persist the choice for future sessions in the current cwd |
 | `--subagents` | Force-enable subagent tools for the current session without changing the saved choice |
@@ -71,6 +75,26 @@ Supported `sessionType` values are `implementation`, `code-exploration`, `implem
 | `--with-plan` (flag) | Start pi with plan mode enabled from the start |
 
 Subagent preferences use Pi's exact absolute cwd: subdirectories, worktrees, and symlink paths have independent choices. A cwd without a saved preference starts disabled; the former global preference is not inherited.
+
+### Voice Input (macOS)
+
+Voice is optional: installing this package does not activate the microphone, install FFmpeg, or require OpenAI credentials for other features. The first release supports local interactive pi on macOS while the agent is idle, not Linux, Windows, RPC, print mode, or SSH microphone forwarding.
+
+1. Install the recorder: `brew install ffmpeg` (the build must include AVFoundation input support).
+2. In pi, run `/login`, choose **OpenAI**, and enter an **OpenAI API key**. Alternatively, set `OPENAI_API_KEY` in the environment before launching pi. Transcription requires API model access and billing; a ChatGPT/Codex subscription login alone is not sufficient. The agent itself can use any provider.
+3. Run `/voice setup` to check configuration. This checks credential presence, not validity, quota, or model access, and does not record or upload audio.
+4. Run `/voice-mic` to select the built-in microphone, connected AirPods, or **System default** (follows macOS input settings). Only uniquely named devices are listed; if identically named devices are connected, use System default or disconnect one.
+5. Run `/voice`. On first capture, allow your terminal under **System Settings → Privacy & Security → Microphone**. If permission takes longer than the startup timeout, grant it and run `/voice` again.
+6. Speak, then press **Enter** to stop and transcribe. **Esc** or **Ctrl+C** cancels during microphone startup, recording, or transcription. Confirm/cancel keys follow pi's `tui.select.*` bindings.
+7. Review the transcript in pi's editor, edit it if needed, and submit it yourself. Existing editor text is preserved; nothing is automatically sent to the agent.
+
+Recordings stop automatically at five minutes and then transcribe. FFmpeg pipes mono 16-kHz PCM audio into RAM, where the extension creates a WAV and uploads it directly to `https://api.openai.com/v1/audio/transcriptions` using `gpt-transcribe`, billed to your OpenAI API account. There is no package-operated backend, live streaming, or automatic upload retry. Cancelling an in-flight upload stops the local request but cannot retract audio already received by OpenAI or guarantee cancellation of provider-side processing/billing.
+
+The microphone choice is stored in `<pi-agent-dir>/the-ancient-mariner/voice.json` (normally `~/.pi/agent/the-ancient-mariner/voice.json`, respecting `PI_CODING_AGENT_DIR`). No key is stored there or in the memory database: credentials remain managed by pi. Device indexes are resolved afresh before recording. If a selected microphone is missing or ambiguous, pi opens the picker and asks you to run `/voice` again rather than silently recording from another microphone. `/voice-mic` also replaces malformed voice preferences.
+
+The extension creates **no audio files on disk**. The recorder holds a bounded buffer in RAM (at most 9.6 MB of audio plus a WAV header; upload encoding can temporarily use additional memory). The recorder's buffer is cleared and released on success, failure, cancellation, or graceful shutdown/reload. The multipart filename `recording.wav` is only an upload label, not a local file. No audio is saved in the memory database or pi's session history; only the microphone preference remains in a local configuration file. A transcript becomes a conversation message when you submit it.
+
+This is application-level RAM-only handling, not a guarantee against OS swap, crash dumps, or copies held temporarily by the runtime/network stack. OpenAI receives the uploaded audio and its data-retention policies still apply. Older versions that recorded to disk may have left `ancient-mariner-voice-*` folders in the OS temporary directory after a crash; this version does not create or automatically remove those old folders.
 
 ### Memory Library
 
@@ -240,6 +264,7 @@ import memoryExtension from "../../extensions/memory-extension.ts";
 import sessionExtension from "../../extensions/session-extension.ts";
 import planModeExtension from "../../extensions/plan-mode.ts";
 import subAgentsExtension from "../../extensions/subagents-extension.ts";
+import voiceExtension from "../../extensions/voice-extension.ts";
 
 export default function (pi: ExtensionAPI) {
  sessionExtension(pi);
@@ -247,6 +272,7 @@ export default function (pi: ExtensionAPI) {
  lifeCycleExtension(pi, { discoverResources: true });
  subAgentsExtension(pi);
  planModeExtension(pi);
+ voiceExtension(pi);
 }
 ```
 
